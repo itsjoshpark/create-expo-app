@@ -18,7 +18,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "dev.joshuapark.create-expo-app"
+      "package": "dev.joshuapark.create_expo_app"
     },
     "web": {
       "bundler": "metro",
