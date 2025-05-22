@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  SCHEME_NAME: 'createexpoapp' # App's Xcode scheme name
+
 jobs:
   android_build:
     name: Android build
@@ -52,3 +55,64 @@ jobs:
         with:
           name: android_build_release
           path: ${{ github.workspace }}/android/app/build/outputs/apk/release/*.apk
+
+  ios_build:
+    name: iOS build
+    runs-on: macos-15
+    needs: android_build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install npm packages
+        run: npm ci
+
+      - name: Setup Xcode version
+        uses: maxim-lobanov/setup-xcode@v1.6.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Generate iOS project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Cache Xcode build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData
+            ./ios/build
+          key: ${{ runner.os }}-xcode-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-build-
+
+      - name: Xcode project build
+        run: >
+          xcodebuild archive
+          -workspace "${{ env.SCHEME_NAME }}.xcworkspace"
+          -scheme "${{ env.SCHEME_NAME }}"
+          -configuration Release
+          -destination "platform=iOS Simulator,arch=arm64,name=iPhone 16"
+          -archivePath "build/${{ env.SCHEME_NAME }}.xcarchive"
+          CODE_SIGN_IDENTITY=""
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGNING_ALLOWED=NO | xcpretty && exit ${PIPESTATUS[0]}
+        working-directory: ios
+
+      # - name: Xcode export archive
+      #   run: >
+      #     xcodebuild -exportArchive \
+      #     -archivePath "build/${{ env.SCHEME_NAME }}.xcarchive"
+      #     -exportPath "build/ipa"
+      #     -exportOptionsPlist "exportOptions.plist"
+
+      # - name: Upload IPA artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: ios_build_release
+      #     path: ${{ github.workspace }}/ios/build/*.ipa
